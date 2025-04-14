@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"time"
 
@@ -87,8 +88,8 @@ func simulateRace(store *messagebus.TelemetryStore) {
 
 			// Update position based on speed and heading
 			headingRad := yacht.Heading * (3.14159 / 180.0)
-			yacht.Longitude += 0.00001 * yacht.Speed * float64(time.Since(sessions[i].StartTime)/time.Hour) * -1 * float64(0+rand.Intn(10)) // Random variation in longitude change
-			yacht.Latitude += 0.00001 * yacht.Speed * float64(time.Since(sessions[i].StartTime)/time.Hour) * float64(0+rand.Intn(8))        // Random variation in latitude change
+			yacht.Longitude += 0.00001 * yacht.Speed * math.Cos(headingRad) * float64(time.Since(sessions[i].StartTime)/time.Hour)
+			yacht.Latitude += 0.00001 * yacht.Speed * math.Sin(headingRad) * float64(time.Since(sessions[i].StartTime)/time.Hour)
 
 			// Send data updates
 			store.UpdateLiveData(yacht.ID, "speed", yacht.Speed)

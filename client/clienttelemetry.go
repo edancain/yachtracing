@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/edancain/yachtracing/messagebus"
 	"github.com/go-redis/redis/v8"
 )
 
