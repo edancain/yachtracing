@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>San Francisco Bay Yacht Race Telemetry</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Arial', sans-serif;
+        }
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        #header {
+            background-color: #003366;
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #map {
+            flex-grow: 1;
+            width: 100%;
+        }
+        #dashboard {
+            display: flex;
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-top: 1px solid #ccc;
+        }
+        .yacht-info {
+            flex: 1;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .yacht-info h3 {
+            margin-top: 0;
+            color: #003366;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .yacht-info table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .yacht-info td {
+            padding: 3px 0;
+        }
+        .yacht-info td:first-child {
+            font-weight: bold;
+            width: 40%;
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+        }
+        .controls button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .controls button:hover {
+            background-color: #0055aa;
+        }
+        .controls select {
+            padding: 5px;
+            margin-left: 10px;
+        }
+        #playback-controls {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            background-color: #e0e0e0;
+        }
+        #playback-controls button {
+            margin: 0 5px;
+            padding: 5px 15px;
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        #playback-controls button:hover {
+            background-color: #0055aa;
+        }
+        #playback-controls button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #speed-control {
+            display: flex;
+            align-items: center;
+            margin-left: 20px;
+        }
+        #speed-control label {
+            margin-right: 10px;
+        }
+        #time-display {
+            margin-left: 20px;
+            font-weight: bold;
+        }
+        .yacht-marker {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-weight: bold;
+        }
+        .yacht-icon {
+            width: 24px;
+            height: 24px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            transform-origin: center;
+        }
+        #connection-status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .connected {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .disconnected {
+            background-color: #f44336;
+            color: white;
+        }
+        .reconnecting {
+            background-color: #FF9800;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="header">
+            <h1>San Francisco Bay Yacht Race</h1>
+            <div class="controls">
+                <div id="connection-status" class="disconnected">Disconnected</div>
+                <button id="connect-btn">Connect</button>
+                <select id="session-select">
+                    <option value="">Select Session</option>
+                </select>
+            </div>
+        </div>
+        
+        <div id="playback-controls">
+            <button id="play-btn" disabled>▶ Play</button>
+            <button id="pause-btn" disabled>⏸ Pause</button>
+            <div id="speed-control">
+                <label for="speed-select">Speed:</label>
+                <select id="speed-select">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                    <option value="5">5x</option>
+                    <option value="10">10x</option>
+                </select>
+            </div>
+            <div id="time-display">00:00:00</div>
+        </div>
+        
+        <div id="map"></div>
+        
+        <div id="dashboard">
+            <div class="yacht-info" id="yacht1-info">
+                <h3>America</h3>
+                <table>
+                    <tr>
+                        <td>Speed:</td>
+                        <td id="yacht1-speed">0.0 knots</td>
+                    </tr>
+                    <tr>
+                        <td>Heading:</td>
+                        <td id="yacht1-heading">0°</td>
+                    </tr>
+                    <tr>
+                        <td>Wind Speed:</td>
+                        <td id="yacht1-wind-speed">0.0 knots</td>
+                    </tr>
+                    <tr>
+                        <td>Wind Direction:</td>
+                        <td id="yacht1-wind-dir">0°</td>
+                    </tr>
+                    <tr>
+                        <td>Position:</td>
+                        <td id="yacht1-position">0.0000° N, 0.0000° W</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <div class="yacht-info" id="yacht2-info">
+                <h3>New Zealand</h3>
+                <table>
+                    <tr>
+                        <td>Speed:</td>
+                        <td id="yacht2-speed">0.0 knots</td>
+                    </tr>
+                    <tr>
+                        <td>Heading:</td>
+                        <td id="yacht2-heading">0°</td>
+                    </tr>
+                    <tr>
+                        <td>Wind Speed:</td>
+                        <td id="yacht2-wind-speed">0.0 knots</td>
+                    </tr>
+                    <tr>
+                        <td>Wind Direction:</td>
+                        <td id="yacht2-wind-dir">0°</td>
+                    </tr>
+                    <tr>
+                        <td>Position:</td>
+                        <td id="yacht2-position">0.0000° N, 0.0000° W</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script>
+        // Yacht telemetry client application
+        const app = {
+            map: null,
+            yachts: {
+                'America': {
+                    marker: null,
+                    path: [],
+                    pathLine: null,
+                    color: '#FF0000',
+                    data: {}
+                },
+                'New Zealand': {
+                    marker: null,
+                    path: [],
+                    pathLine: null,
+                    color: '#0000FF',
+                    data: {}
+                }
+            },
+            isPlaying: false,
+            playbackSpeed: 1,
+            currentTime: null,
+            startTime: null,
+            endTime: null,
+            telemetryData: [],
+            currentIndex: 0,
+            playbackTimer: null,
+            connectionStatus: 'disconnected',
+
+            // Initialize the application
+            initialize: function() {
+                // Initialize the map
+                this.initMap();
+                
+                // Set up event listeners
+                this.setupEventListeners();
+                
+                // Initialize yacht markers
+                this.initYachtMarkers();
+                
+                // Fetch available sessions
+                this.fetchAvailableSessions();
+            },
+
+            // Initialize the map
+            initMap: function() {
+                // Create the map centered on Alcatraz Island
+                this.map = L.map('map').setView([37.8270, -122.4230], 14);
+                
+                // Add the OpenStreetMap tile layer
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(this.map);
+                
+                // Add Alcatraz marker
+                L.marker([37.8270, -122.4230])
+                    .bindPopup('Alcatraz Island')
+                    .addTo(this.map);
+            },
+
+            // Set up event listeners
+            setupEventListeners: function() {
+                // Connect button
+                document.getElementById('connect-btn').addEventListener('click', () => {
+                    if (this.connectionStatus === 'disconnected') {
+                        this.connectToServer();
+                    } else {
+                        this.disconnectFromServer();
+                    }
+                });
+                
+                // Session select
+                document.getElementById('session-select').addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        this.loadSession(e.target.value);
+                    }
+                });
+                
+                // Play button
+                document.getElementById('play-btn').addEventListener('click', () => {
+                    this.startPlayback();
+                });
+                
+                // Pause button
+                document.getElementById('pause-btn').addEventListener('click', () => {
+                    this.pausePlayback();
+                });
+                
+                // Speed select
+                document.getElementById('speed-select').addEventListener('change', (e) => {
+                    this.playbackSpeed = parseFloat(e.target.value);
+                    if (this.isPlaying) {
+                        // If already playing, restart with new speed
+                        this.pausePlayback();
+                        this.startPlayback();
+                    }
+                });
+            },
+
+            // Initialize yacht markers
+            initYachtMarkers: function() {
+                for (const yachtId in this.yachts) {
+                    const yacht = this.yachts[yachtId];
+                    
+                    // Create a custom icon for each yacht
+                    const yachtIcon = L.divIcon({
+                        className: 'yacht-marker',
+                        html: `
+                            <div class="yacht-icon" style="
+                                background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><path fill="${yacht.color}" d="M12,2L1,21H23L12,2M12,6L19.5,19H4.5L12,6Z"/></svg>');
+                                transform: rotate(0deg);
+                            "></div>
+                            <div>${yachtId}</div>
+                        `,
+                        iconSize: [50, 50],
+                        iconAnchor: [25, 25]
+                    });
+                    
+                    // Create a marker for each yacht (initially hidden)
+                    yacht.marker = L.marker([0, 0], { icon: yachtIcon }).addTo(this.map);
+                    yacht.marker.setOpacity(0);
+                    
+                    // Create a path line for each yacht
+                    yacht.pathLine = L.polyline([], { 
+                        color: yacht.color,
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(this.map);
+                }
+            },
+
+            // Connect to the telemetry server
+            connectToServer: function() {
+                // In a real application, this would establish a WebSocket connection
+                this.setConnectionStatus('connected');
+                document.getElementById('connect-btn').textContent = 'Disconnect';
+                
+                // For this demo, we'll simulate loading data from a file
+                fetch('alcatraz_race_data.json')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.telemetryData = data;
+                        if (this.telemetryData.length > 0) {
+                            // Find the time range of the data
+                            this.startTime = new Date(this.telemetryData[0].timestamp);
+                            this.endTime = new Date(this.telemetryData[this.telemetryData.length - 1].timestamp);
+                            
+                            // Enable playback controls
+                            document.getElementById('play-btn').disabled = false;
+                            
+                            // Reset the current time to the start
+                            this.currentTime = new Date(this.startTime);
+                            this.updateTimeDisplay();
+                            
+                            console.log(`Loaded ${this.telemetryData.length} telemetry data points`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error loading telemetry data:', error);
+                        this.setConnectionStatus('disconnected');
+                    });
+            },
+
+            // Disconnect from the telemetry server
+            disconnectFromServer: function() {
+                // Stop playback
+                this.pausePlayback();
+                
+                // Reset connection status
+                this.setConnectionStatus('disconnected');
+                document.getElementById('connect-btn').textContent = 'Connect';
+                
+                // Disable playback controls
+                document.getElementById('play-btn').disabled = true;
+                document.getElementById('pause-btn').disabled = true;
+                
+                // Clear yacht paths
+                this.clearYachtPaths();
+            },
+
+            // Set connection status
+            setConnectionStatus: function(status) {
+                this.connectionStatus = status;
+                const statusElement = document.getElementById('connection-status');
+                statusElement.className = status;
+                
+                if (status === 'connected') {
+                    statusElement.textContent = 'Connected';
+                } else if (status === 'disconnected') {
+                    statusElement.textContent = 'Disconnected';
+                } else if (status === 'reconnecting') {
+                    statusElement.textContent = 'Reconnecting...';
+                }
+            },
+
+            // Fetch available sessions
+            fetchAvailableSessions: function() {
+                // In a real app, this would fetch from the server API
+                // For this demo, we'll just add a dummy session
+                const select = document.getElementById('session-select');
+                select.innerHTML = '<option value="">Select Session</option>';
+                select.innerHTML += '<option value="alcatraz_race">Alcatraz Race - April 14, 2025</option>';
+            },
+
+            // Load a session
+            loadSession: function(sessionId) {
+                console.log(`Loading session: ${sessionId}`);
+                // In a real app, this would load specific session data
+                // For this demo, we'll just connect to the server if not already connected
+                if (this.connectionStatus !== 'connected') {
+                    this.connectToServer();
+                }
+            },
+
+            // Start playback
+            startPlayback: function() {
+                if (this.isPlaying) return;
+                
+                this.isPlaying = true;
+                document.getElementById('play-btn').disabled = true;
+                document.getElementById('pause-btn').disabled = false;
+                
+                // Find the current index based on current time
+                this.findCurrentIndex();
+                
+                // Start the playback timer
+                this.playbackTimer = setInterval(() => {
+                    this.updatePlayback();
+                }, 100); // Update 10 times per second
+            },
+
+            // Pause playback
+            pausePlayback: function() {
+                if (!this.isPlaying) return;
+                
+                this.isPlaying = false;
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = true;
+                
+                // Stop the playback timer
+                if (this.playbackTimer) {
+                    clearInterval(this.playbackTimer);
+                    this.playbackTimer = null;
+                }
+            },
+
+            // Find the current index based on current time
+            findCurrentIndex: function() {
+                if (!this.currentTime || this.telemetryData.length === 0) return;
+                
+                // Find the index of the first data point after the current time
+                for (let i = 0; i < this.telemetryData.length; i++) {
+                    const timestamp = new Date(this.telemetryData[i].timestamp);
+                    if (timestamp >= this.currentTime) {
+                        this.currentIndex = i;
+                        return;
+                    }
+                }
+                
+                // If we reach here, all data points are before the current time
+                this.currentIndex = this.telemetryData.length - 1;
+            },
+
+            // Update playback
+            updatePlayback: function() {
+                if (!this.isPlaying || this.telemetryData.length === 0) return;
+                
+                // Advance current time
+                const elapsed = 100 * this.playbackSpeed; // milliseconds since last update
+                this.currentTime = new Date(this.currentTime.getTime() + elapsed);
+                
+                // Check if playback has reached the end
+                if (this.currentTime > this.endTime) {
+                    this.currentTime = new Date(this.endTime);
+                    this.pausePlayback();
+                    return;
+                }
+                
+                // Update time display
+                this.updateTimeDisplay();
+                
+                // Process data points up to current time
+                while (this.currentIndex < this.telemetryData.length) {
+                    const data = this.telemetryData[this.currentIndex];
+                    const timestamp = new Date(data.timestamp);
+                    
+                    if (timestamp > this.currentTime) {
+                        break; // This data point is in the future
+                    }
+                    
+                    // Process this data point
+                    this.processDataPoint(data);
+                    this.currentIndex++;
+                }
+            },
+
+            // Process a single data point
+            processDataPoint: function(data) {
+                if (!data || !data.yacht_id) return;
+                
+                const yacht = this.yachts[data.yacht_id];
+                if (!yacht) return; // Unknown yacht
+                
+                // Update yacht data
+                yacht.data = data;
+                
+                // Update yacht position and path
+                if (data.position) {
+                    const pos = [data.position.latitude, data.position.longitude];
+                    
+                    // Update marker position
+                    yacht.marker.setLatLng(pos);
+                    yacht.marker.setOpacity(1); // Make sure it's visible
+                    
+                    // Update icon rotation based on heading
+                    if (data.heading !== undefined) {
+                        const iconElement = yacht.marker.getElement().querySelector('.yacht-icon');
+                        if (iconElement) {
+                            iconElement.style.transform = `rotate(${data.heading}deg)`;
+                        }
+                    }
+                    
+                    // Add to path
+                    yacht.path.push(pos);
+                    yacht.pathLine.setLatLngs(yacht.path);
+                }
+                
+                // Update dashboard display
+                this.updateDashboard();
+            },
+
+            // Update dashboard display
+            updateDashboard: function() {
+                for (const yachtId in this.yachts) {
+                    const yacht = this.yachts[yachtId];
+                    const data = yacht.data;
+                    if (!data) continue;
+                    
+                    // Format yacht ID for DOM ID (lowercase, no spaces)
+                    const domId = yachtId.toLowerCase().replace(/\s+/g, '');
+                    
+                    // Update speed
+                    if (data.speed !== undefined) {
+                        document.getElementById(`${domId}-speed`).textContent = `${data.speed.toFixed(1)} knots`;
+                    }
+                    
+                    // Update heading
+                    if (data.heading !== undefined) {
+                        document.getElementById(`${domId}-heading`).textContent = `${Math.round(data.heading)}°`;
+                    }
+                    
+                    // Update wind speed
+                    if (data.wind_speed !== undefined) {
+                        document.getElementById(`${domId}-wind-speed`).textContent = `${data.wind_speed.toFixed(1)} knots`;
+                    }
+                    
+                    // Update wind direction
+                    if (data.wind_dir !== undefined) {
+                        document.getElementById(`${domId}-wind-dir`).textContent = `${Math.round(data.wind_dir)}°`;
+                    }
+                    
+                    // Update position
+                    if (data.position) {
+                        const lat = data.position.latitude;
+                        const lng = data.position.longitude;
+                        const latDir = lat >= 0 ? 'N' : 'S';
+                        const lngDir = lng >= 0 ? 'E' : 'W';
+                        document.getElementById(`${domId}-position`).textContent = 
+                            `${Math.abs(lat).toFixed(4)}° ${latDir}, ${Math.abs(lng).toFixed(4)}° ${lngDir}`;
+                    }
+                }
+            },
+
+            // Update time display
+            updateTimeDisplay: function() {
+                if (!this.currentTime) return;
+                
+                // Calculate elapsed time
+                const elapsed = this.currentTime - this.startTime;
+                
+                // Format as HH:MM:SS
+                const hours = Math.floor(elapsed / 3600000);
+                const minutes = Math.floor((elapsed % 3600000) / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                
+                const timeStr = 
+                    String(hours).padStart(2, '0') + ':' + 
+                    String(minutes).padStart(2, '0') + ':' + 
+                    String(seconds).padStart(2, '0');
+                
+                document.getElementById('time-display').textContent = timeStr;
+            },
+
+            // Clear yacht paths
+            clearYachtPaths: function() {
+                for (const yachtId in this.yachts) {
+                    const yacht = this.yachts[yachtId];
+                    
+                    // Hide marker
+                    yacht.marker.setOpacity(0);
+                    
+                    // Clear path
+                    yacht.path = [];
+                    yacht.pathLine.setLatLngs([]);
+                }
+            }
+        };
+
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            app.initialize();
+        });
+    </script>
+</body>
+</html>
